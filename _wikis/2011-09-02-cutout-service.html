@@ -1,0 +1,70 @@
+--- 
+layout: wiki
+title: cutout service
+published: false
+meta: 
+  _oembed_ac3c73760167504a0bb2b24a31966d1e: "{{unknown}}"
+  _oembed_cef049acfb8cb20dd5293aaf3c102936: "{{unknown}}"
+  _oembed_2a071d4d0f0cd9cb96ad1a37bf8453d3: "{{unknown}}"
+  _edit_last: "3"
+  _oembed_22afd276aa574d909a896195bd4e4302: "{{unknown}}"
+tags: []
+
+type: wiki
+status: draft
+---
+=== Interfaces ===
+== HDF5 ==
+HDF5 is a scientific data format that supports mutliple file and arrays.HDF5 is the recommended interface for Matlab, R, C, C++, C#.  Each of theseplatforms has a supported HDFS implementation
+The HDF5 cutout service exports a single 3-d cube of data in an HDF5 file.  The URL for the service is of the form:
+http://openconnectomeproject.org/cutout/{{dataset}}/HDF5/{{restargs}}
+The arguments to the RESTful interface //restargs// consist of //resolution\/xlow,xhigh\/ylow,yhigh\/zlow,zhigh\///
+The cube data is in a single HDF5 dataset called "cube".  Data are gzip compressed, but HDF5 should handle that transparently.   The following code snippet shows how to access HDFS data in Matlab.
+tmpfile = tempfile  urlwrite ( 'http://openconnectomeproject.org/cutout/hayworth5nm/hdF5/2/512,1024/512,1024/50,70/global/', tmpfile )  hdf5read ( tmpfile, 'cube' )
+The example creates a temporary file and then uses //urlwrite// to fetch the HDF5 data into the temporary file and the //hdf5read// to extract the 'cube' data set into a Matlab array.  The temporary file keeps the data set in memory, is more efficient, and requres no cleanup.  For very large transfers, that exceed the memory of your machine, one should perform //urlwrite// to a named file in the file system.
+== npz ==
+Python users programming with Numpy can retrieve a gzipped NumPy pickle and do not need to install or use the HDF5 library.  This interface is recommended only for Python users.
+http://openconnectomeproject.org/cutout/{{dataset}}/npz/{{restargs}}
+The arguments to the RESTful interface //restargs// consist of //resolution\/xlow,xhigh\/ylow,yhigh\/zlow,zhigh\///
+The following code snippet shows how to access a NumPy pickle.
+import numpy as np  import urllib2  import zlib  import StringIO
+try:    f = urllib2.urlopen ( "http://openconnectomeproject.org/cutout/hayworth5nm/cube/2/0,500/0,500/0,10/")  except URLError:    assert 0
+zdata = f.read ()
+datastr = zlib.decompress ( zdata[:] )  datafobj = StringIO.StringIO ( datastr )  cube = np.load ( datafobj )
+The //urlopen// call creates a readable file handle.  The gzipped data are read and decompressed into a string.  That string is converted into a file object, using StringIO, and then loaded as a NumPy array.
+== Image Planes (xy, xz, yz) ==
+The cutout service can be used to cut out cubes that are signle pixel wide in any of the x, y, or z dimensions.   These single pixels wide cubes are presented as 2-d PNG images.  This interface allows human users to view the data.  The CATMAID service for browsing data is the recommended interface for viewing data slices.  It supports many browsing features.  However, the //xz// and //yz// interfaces creates slice orthogonal images not available in CATMAID.
+The interfaces are:
+(xy) http://openconnectomeproject.org/cutout/{{dataset}}/xy/{{restargs}}  (xz) http://openconnectomeproject.org/cutout/{{dataset}}/xz/{{restargs}}  (yz) http://openconnectomeproject.org/cutout/{{dataset}}/yz/{{restargs}}
+Each of these returns a PNG image.  The x and y dimensions will contain thenumber of pixels specified in the x-range and y-range.  The pixels in thez dimension are scaled so that the image looks physically realsitic.(See image scaling. TODO make link)
+=== RESTful Arguments ===
+The cutout service uses the following convetion to represent resolutionand ranges for each dimension.
+/xmin,xmax/ymin,ymax/zmin,zmax/
+This returns a cube of size (xmax-xmin,ymax-ymin,zmax-zmin)cutout from the corner (xmin,ymin,zmin).These correspond to the python conventions for ranges.For exmaple the URL
+http://openconnectomeproject.org/cutout/hayworth5nm/hdf5/2/512,1024/512,1024/50,70/global/
+returns a cube of size 512x512x20 pixels representing the pixels (512-1023,512-1023,50-69) inclusive.  The image cutout service replaces one of these dimension with an offset rather than a range.  An example of an xz plane is;
+http://www.openconnectomeproject.org/cutout/kasthuri11/xz/4/1000,2000/500/0,64/
+returns an image of size 1000x64 pixels at y offset 500.  This URLuses local coordinates rather than global as does the previous.
+
+== Local and Global Coordinates ==
+Glohal coordinates describe the highest resolution image as takenby the instrument.  Users can express a range of data in global coordinatesat any resolution.  This will return the same region of data.  The sizeof the data in pixels will vary by the scale factor.  For example,the xyz range /1024,2048/1024,2048/256-512/ returns an imageof size 1024x1024x256 at the base resolution of 0, an image of size512x512x128 at resolution 1, and 256x256x64 at resolution 2.
+Local coordinates describe the pixels as the given resolution.Typically, the lowest resolution typically consists of256x256 pixels per slice and the maximum range expressedin the RESTful arguments are /0,256/0-256/z/.  Thesame data region will have different coordinates in eachresolution.  For example, the region /1024,2048/1024,2048/0-256/at resolution 6 will have coordinates /512,1024/512,1024/0-256/at resolution 7.  Note that the z dimesion remains the sameat every resolution.  Slices are not scaled in the hierarchy.
+
+=== Data Sets ===
+The available datasets are used in the //dataset// argument are:  * bock11  * hayworth5nm  * kasthuri11These are described below.
+== bock11 ==
+Each image pixel in the highest resolution is 3nm x 3nm and each slice is 30nm thick.Each high-resolution image size is XY pixels and slices are numbered 2917 through 4156.Thus, the global coordinates are [0-X,0-Y, 2917-4156].The data are stored in a hierarchy of cubes with the following properties:
+Level &amp; Cube Size &amp;  Pixels in (X,Y) &amp; Z scale factor  \\    0   &amp; 128x128x16  &amp; (135424,119808) &amp; 10   \    1   &amp; 128x128x16  &amp; (67840,59904) &amp; 5 \\    2   &amp; 128x128x16  &amp; (34048,29952) &amp; 2.5 \\    3   &amp; 128x128x16  &amp; (17152,15104) &amp; 1.25 \\    4   &amp; 128x128x16  &amp; (8704,7680) &amp; 0.625  \\    5   &amp; 128x128x16  &amp; (4352,3840) &amp; 0.3125 \\    6   &amp; 64x64x64  &amp;  (2304,2048) &amp; 0.15625 \\    7   &amp; 64x64x64  &amp;  (1280,1024) &amp; 0.078125 \\    8   &amp; 64x64x64  &amp;  (768,768) &amp;  0.0390625 \\    8   &amp; 64x64x64  &amp;  (512,5125) &amp; 0.01953125 \\    10  &amp; 64x64x64  &amp;  (256,256) &amp;  0.009765625 \\
+
+The image pixels are local coordinates.  They correspond to globalcoordinates, reduced by the scale factor, rounded up to the cube size.Pixels not in the original image are black (0 valued).  Some pixels inthe global coordinates, original images, are also black.
+The data are described in detail in //TODO//.
+== hayworth5nm ==
+Each image pixel in the highest resolution is 5nm x 5nm and each slice is 30nm thick.Each high-resolution image size is XY pixels and slices are numbered 0 through 94.Thus, the global coordinates are [0-X,0-Y, 0-94].The data are stored in a hierarchy of cubes with the following properties:
+Level &amp; Cube Size &amp;  Cubes in (X,Y) &amp; Pixels in (X,Y) &amp; Z scale factor  \\    0   &amp; 128x128x16  &amp; (7424,7424) &amp; 6 \\    1   &amp; 128x128x16  &amp; (3840,3840) &amp; 3 \\    2   &amp; 128x128x16  &amp; (2048,2048) &amp; 1.5 \\    3   &amp; 128x128x16  &amp; (1024,1024) &amp; 0.75 \\    4   &amp; 128x128x16  &amp; (512,512) &amp; 0.375 \\    5   &amp; 128x128x16  &amp; (256,256) &amp; 0.1875 \\
+The image pixels are local coordinates.  They correspond to globalcoordinates, reduced by the scale factor, rounded up to the cube size.Pixels not in the original image are black (0 valued).  Some pixels inthe global coordinates, original images, are also black.
+The data are described in detail in //TODO//.
+== kasthuri11 ==
+Each image pixel in the highest resolution is 5nm x 5nm and each slice is 30nm thick.Each high-resolution image size is XY pixels and slices are numbered 0 through 94.Thus, the global coordinates are [0-X,0-Y, 0-94].The data are stored in a hierarchy of cubes with the following properties:
+Level &amp; Cube Size &amp;  Pixels in (X,Y) &amp; Z scale factor  \\    1   &amp; 128x128x16  &amp; (10752,13312) &amp; 10 \\    2   &amp; 128x128x16  &amp; (5376,6656) &amp; 5 \\    3   &amp; 128x128x16  &amp; (2816,3328) &amp; 2.5 \\    4   &amp; 128x128x16  &amp; (1536,1792) &amp; 1.25 \\    5   &amp; 128x128x16  &amp; (768,1024) &amp; 0.625 \\    6   &amp; 64x64x64  &amp;  (512,512) &amp; 0.3125 \\    7   &amp; 64x64x64  &amp;  (256,256) &amp; 0.15625 \\
+The image pixels are local coordinates.  They correspond to globalcoordinates, reduced by the scale factor, rounded up to the cube size.Pixels not in the original image are black (0 valued).  Some pixels inthe global coordinates, original images, are also black.
+The data are described in detail in //TODO//.
